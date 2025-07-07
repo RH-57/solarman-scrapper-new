@@ -5,4 +5,11 @@
 # Excel & logs
 *.xlsx
 
-solarman-session.json
+sessions/*
+excel/*
+excel_daily/*
+
+# Tapi jangan abaikan file .gitkeep
+!sessions/.gitkeep
+!excel/.gitkeep
+!excel_daily/.gitkeep

@@ -16,7 +16,6 @@ init(autoreset=True)
 # Load .env
 load_dotenv()
 
-DATA_FILE = os.getenv("DATA_FILE", "daily_positive_energy.xlsx")
 INTERVAL_HOURS = int(os.getenv("INTERVAL_HOURS", 2))
 SAVE_TO_MYSQL = os.getenv("SAVE_TO_MYSQL", "false").lower() == "true"
 USERS_FILE = os.path.join("users", "users.json")
@@ -48,22 +47,29 @@ def log(message):
 
 def save_to_excel(device_id, new_data):
     sheet_name = str(device_id)
+    username = new_data["Username"].iloc[0]  # Ambil username dari DataFrame
+    excel_dir = "excel"
+    os.makedirs(excel_dir, exist_ok=True)
+
+    user_excel_path = os.path.join(excel_dir, f"{username}.xlsx")
+
     try:
-        if os.path.exists(DATA_FILE):
-            book = load_workbook(DATA_FILE)
+        if os.path.exists(user_excel_path):
+            book = load_workbook(user_excel_path)
             if sheet_name in book.sheetnames:
-                old_data = pd.read_excel(DATA_FILE, sheet_name=sheet_name)
+                old_data = pd.read_excel(user_excel_path, sheet_name=sheet_name)
                 combined = pd.concat([new_data, old_data], ignore_index=True)
             else:
                 combined = new_data
-            with pd.ExcelWriter(DATA_FILE, engine='openpyxl', mode='a', if_sheet_exists='overlay') as writer:
+            with pd.ExcelWriter(user_excel_path, engine='openpyxl', mode='a', if_sheet_exists='overlay') as writer:
                 combined.to_excel(writer, sheet_name=sheet_name, index=False)
         else:
-            with pd.ExcelWriter(DATA_FILE, engine='openpyxl') as writer:
+            with pd.ExcelWriter(user_excel_path, engine='openpyxl') as writer:
                 new_data.to_excel(writer, sheet_name=sheet_name, index=False)
-        log(f"✅ File Excel updated untuk device [{sheet_name}].")
+        log(f"✅ File Excel [{username}.xlsx] updated untuk device [{sheet_name}].")
     except Exception as e:
-        log(f"❌ Gagal simpan Excel: {e}")
+        log(f"❌ Gagal simpan Excel [{username}.xlsx]: {e}")
+
 
 def save_to_mysql(data):
     try:
