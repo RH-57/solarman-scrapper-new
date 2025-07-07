@@ -16,10 +16,9 @@ init(autoreset=True)
 # Load .env
 load_dotenv()
 
-DATA_BACKUP_FILE = os.getenv("DATA_BACKUP_FILE", "daily_positive_energy_latest.xlsx")
+DATA_FILE = os.getenv("DATA_FILE", "daily_positive_energy.xlsx")
 INTERVAL_HOURS = int(os.getenv("INTERVAL_HOURS", 2))
 SAVE_TO_MYSQL = os.getenv("SAVE_TO_MYSQL", "false").lower() == "true"
-DB_BACKUP_NAME = os.getenv("DB_NAME_BACKUP", "db_solarman_2")
 USERS_FILE = os.path.join("users", "users.json")
 
 DB_CONFIG = {
@@ -27,7 +26,7 @@ DB_CONFIG = {
     "port": int(os.getenv("DB_PORT", 3306)),
     "user": os.getenv("DB_USER"),
     "password": os.getenv("DB_PASSWORD"),
-    "database": os.getenv("DB_NAME_BACKUP")
+    "database": os.getenv("DB_NAME")
 }
 
 # Load users
@@ -50,17 +49,17 @@ def log(message):
 def save_to_excel(device_id, new_data):
     sheet_name = str(device_id)
     try:
-        if os.path.exists(DATA_BACKUP_FILE):
-            book = load_workbook(DATA_BACKUP_FILE)
+        if os.path.exists(DATA_FILE):
+            book = load_workbook(DATA_FILE)
             if sheet_name in book.sheetnames:
-                old_data = pd.read_excel(DATA_BACKUP_FILE, sheet_name=sheet_name)
+                old_data = pd.read_excel(DATA_FILE, sheet_name=sheet_name)
                 combined = pd.concat([new_data, old_data], ignore_index=True)
             else:
                 combined = new_data
-            with pd.ExcelWriter(DATA_BACKUP_FILE, engine='openpyxl', mode='a', if_sheet_exists='overlay') as writer:
+            with pd.ExcelWriter(DATA_FILE, engine='openpyxl', mode='a', if_sheet_exists='overlay') as writer:
                 combined.to_excel(writer, sheet_name=sheet_name, index=False)
         else:
-            with pd.ExcelWriter(DATA_BACKUP_FILE, engine='openpyxl') as writer:
+            with pd.ExcelWriter(DATA_FILE, engine='openpyxl') as writer:
                 new_data.to_excel(writer, sheet_name=sheet_name, index=False)
         log(f"✅ File Excel updated untuk device [{sheet_name}].")
     except Exception as e:
