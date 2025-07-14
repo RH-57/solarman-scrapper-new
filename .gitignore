@@ -8,8 +8,10 @@
 sessions/*
 excel/*
 excel_daily/*
+users/*
 
 # Tapi jangan abaikan file .gitkeep
 !sessions/.gitkeep
 !excel/.gitkeep
 !excel_daily/.gitkeep
+!users/.gitkeep

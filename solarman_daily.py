@@ -232,17 +232,15 @@ async def countdown(seconds):
 
 async def main():
     async with async_playwright() as p:
-        while True:
-            # 🔁 Baca ulang file users.json setiap loop
-            with open(USERS_FILE, "r") as f:
-                USERS = json.load(f)
+        # 🔁 Baca ulang file users.json hanya sekali
+        with open(USERS_FILE, "r") as f:
+            USERS = json.load(f)
 
-            for user in USERS:
-                for device_id in user["device_id"]:
-                    await scrape_device(p, user, device_id)
-                    await countdown(15)
+        for user in USERS:
+            for device_id in user["device_id"]:
+                await scrape_device(p, user, device_id)
+                await countdown(15)
 
-            log(f"\n🕒 Menunggu {INTERVAL_HOURS} jam untuk scraping berikutnya...\n")
-            await asyncio.sleep(INTERVAL_HOURS * 3600)
+        log(f"\n✅ Scraping selesai. Program keluar.\n")
 if __name__ == "__main__":
     asyncio.run(main())
