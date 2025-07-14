@@ -6,8 +6,8 @@ import os
 import json
 from dotenv import load_dotenv
 from openpyxl import load_workbook
-import mysql.connector
-from mysql.connector import Error
+from db import get_connection
+import mariadb
 from colorama import init, Fore
 
 # Init colorama
@@ -20,14 +20,6 @@ INTERVAL_HOURS = int(os.getenv("INTERVAL_HOURS", 2))
 SAVE_TO_MYSQL = os.getenv("SAVE_TO_MYSQL", "false").lower() == "true"
 DB_BACKUP_NAME = os.getenv("DB_NAME_BACKUP", "db_solarman_2")
 USERS_FILE = os.path.join("users", "users.json")
-
-DB_CONFIG = {
-    "host": os.getenv("DB_HOST"),
-    "port": int(os.getenv("DB_PORT", 3306)),
-    "user": os.getenv("DB_USER"),
-    "password": os.getenv("DB_PASSWORD"),
-    "database": os.getenv("DB_NAME_BACKUP")
-}
 
 def log_inline(message):
     now = datetime.now().strftime("[%H:%M:%S]")
@@ -69,28 +61,28 @@ def save_to_excel(device_id, new_data):
 
 
 def save_to_mysql(data):
+    conn = get_connection(db_override=DB_BACKUP_NAME)
+    if not conn:
+        log("❌ Gagal terhubung ke database.")
+        return
     try:
-        conn = mysql.connector.connect(**DB_CONFIG)
-        if conn.is_connected():
-            cursor = conn.cursor()
-            query = """
-                INSERT INTO logs_meter (username, name, device_id, device_name, dpe, unit, timestamp)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
-            """
-            cursor.execute(query, (
-                data["Username"], data["Name"], data["Device ID"], data["Device Name"],
-                data["Daily Positive Energy"], data["Unit"], data["DateTime"]
-            ))
-            conn.commit()
-            log(f"✅ Data berhasil disimpan ke MySQL.")
-        else:
-            log("❌ Gagal terhubung ke database.")
-    except Error as e:
+        cursor = conn.cursor()
+        query = """
+            INSERT INTO logs_meter (username, name, device_id, device_name, dpe, unit, timestamp)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """
+        cursor.execute(query, (
+            data["Username"], data["Name"], data["Device ID"], data["Device Name"],
+            data["Daily Positive Energy"], data["Unit"], data["DateTime"]
+        ))
+        conn.commit()
+        log(f"✅ Data berhasil disimpan ke MySQL.")
+    
+    except mariadb.Error as e:
         log(f"❌ Error saat menyimpan ke MySQL: {e}")
     finally:
-        if conn.is_connected():
-            cursor.close()
-            conn.close()
+        cursor.close()
+        conn.close()
 
 async def get_account_info(page):
     try:
