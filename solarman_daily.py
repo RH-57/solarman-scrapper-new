@@ -118,7 +118,7 @@ async def close_popup(page):
     except:
         pass
 
-async def scrape_device(p, user, device_id):
+async def scrape_device(p, user, device_id, username_real, name_real):
     username_env = user["username"]
     password_env = user["password"]
     session_file = os.path.join("sessions", f"session_{username_env}.json")
@@ -181,9 +181,9 @@ async def scrape_device(p, user, device_id):
             await page.wait_for_selector('div.panel:has(span.fsLv3:has-text("Total"))')
             total_panel = await page.query_selector('div.panel:has(span.fsLv3:has-text("Total"))')
             daily_el = await total_panel.query_selector('li:has-text("Daily Positive Energy")')
-        except:
-            log(f"❌ Gagal temukan DPE untuk device {device_id}")
-            return
+        except Exception as e:
+            log(f"❌ Gagal temukan DPE untuk device {device_id}: {e}")
+            raise Exception(f"Gagal scraping DPE device {device_id}")
 
         full_text = await daily_el.inner_text()
         log(f"📊 Data ditemukan: {full_text}")
@@ -230,17 +230,69 @@ async def countdown(seconds):
         await asyncio.sleep(1)
     print()
 
+async def scrape_device_with_retry(p, user, device_id, username_real, name_real, max_retries=5, delay_seconds=10):
+    attempt = 1
+    while attempt <= max_retries:
+        log(f"🔁 Attempt {attempt} untuk scrape device {device_id}")
+        try:
+            await scrape_device(p, user, device_id, username_real, name_real)
+            log(f"✅ Scraping device {device_id} berhasil pada attempt {attempt}")
+            return
+        except Exception as e:
+            log(f"❌ Gagal scrape device {device_id} pada attempt {attempt}: {e}")
+            attempt += 1
+            if attempt <= max_retries:
+                log(f"⏳ Menunggu {delay_seconds} detik sebelum mencoba ulang...")
+                await asyncio.sleep(delay_seconds)
+            else:
+                log(f"⚠️ Melewati device {device_id} setelah {max_retries} percobaan gagal.")
+
+
 async def main():
     async with async_playwright() as p:
-        # 🔁 Baca ulang file users.json hanya sekali
         with open(USERS_FILE, "r") as f:
             USERS = json.load(f)
 
         for user in USERS:
+            username_env = user["username"]
+            password_env = user["password"]
+            session_file = os.path.join("sessions", f"session_{username_env}.json")
+
+            # Buat browser & context baru
+            browser = await p.chromium.launch(headless=False, channel="chrome")
+            if os.path.exists(session_file):
+                context = await browser.new_context(storage_state=session_file)
+            else:
+                context = await browser.new_context()
+                page = await context.new_page()
+                await page.goto("https://globalpro.solarmanpv.com/login")
+                await page.click("text=International")
+                await page.click("text=Confirm")
+                try:
+                    await page.wait_for_selector('.tabBar div.afterButton >> text=Username', timeout=5000)
+                    await page.click('.tabBar div.afterButton >> text=Username')
+                    log("🟦 Tab 'Username' dipilih.")
+                except Exception as e:
+                    log(f"⚠️ Gagal memilih tab 'Username': {e}")
+
+                await page.fill('input[placeholder="Username"]', username_env)
+                await page.fill('input[placeholder="Password"]', password_env)
+                log("🔐 Silakan login manual jika ada captcha. Tekan ENTER jika sudah login.")
+                input()
+                await page.wait_for_timeout(3000)
+                await context.storage_state(path=session_file)
+
+            page = await context.new_page()
+            username_real, name_real = await get_account_info(page)
+            await page.close()
+
             for device_id in user["device_id"]:
-                await scrape_device(p, user, device_id)
+                await scrape_device_with_retry(p, user, device_id, username_real, name_real)
                 await countdown(15)
 
-        log(f"\n✅ Scraping selesai. Program keluar.\n")
+            await browser.close()
+
+        log(f"\n✅ Semua scraping selesai. Program keluar.\n")
+
 if __name__ == "__main__":
     asyncio.run(main())
