@@ -153,12 +153,13 @@ async def scrape_device(p, user, device_id, username_real, name_real):
             await page.wait_for_selector('div.panel:has(span.fsLv3:has-text("Total"))')
             total_panel = await page.query_selector('div.panel:has(span.fsLv3:has-text("Total"))')
             daily_el = await total_panel.query_selector('li:has-text("Daily Positive Energy")')
-        except:
-            log(f"❌ Gagal temukan DPE untuk device {device_id}")
-            return
+        except Exception as e:
+            log(f"❌ Gagal temukan DPE untuk device {device_id}: {e}")
+            raise Exception(f"Gagal scraping DPE device {device_id}")
 
         full_text = await daily_el.inner_text()
         log(f"📊 Data ditemukan: {full_text}")
+        
         import re
         match = re.match(r"([\d\.\-]+)\s*(\w+)", full_text.split("：")[-1].strip())
         value = float(match.group(1)) if match else full_text
@@ -201,6 +202,23 @@ async def countdown(seconds):
         await asyncio.sleep(1)
     print()
 
+async def scrape_device_with_retry(p, user, device_id, username_real, name_real, max_retries=5, delay_seconds=10):
+    attempt = 1
+    while attempt <= max_retries:
+        log(f"🔁 Attempt {attempt} untuk scrape device {device_id}")
+        try:
+            await scrape_device(p, user, device_id, username_real, name_real)
+            log(f"✅ Scraping device {device_id} berhasil pada attempt {attempt}")
+            return
+        except Exception as e:
+            log(f"❌ Gagal scrape device {device_id} pada attempt {attempt}: {e}")
+            attempt += 1
+            if attempt <= max_retries:
+                log(f"⏳ Menunggu {delay_seconds} detik sebelum mencoba ulang...")
+                await asyncio.sleep(delay_seconds)
+            else:
+                log(f"⚠️ Melewati device {device_id} setelah {max_retries} percobaan gagal.")
+
 async def main():
     async with async_playwright() as p:
         while True:
@@ -240,8 +258,9 @@ async def main():
                 await page.close()
 
                 for device_id in user["device_id"]:
-                    await scrape_device(p, user, device_id, username_real, name_real)
+                    await scrape_device_with_retry(p, user, device_id, username_real, name_real)
                     await countdown(15)
+
 
                 await browser.close()
 
